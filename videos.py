@@ -46,7 +46,7 @@ def solve_videos(input_path):
 
     print(f"Données : {V} vidéos, {E} endpoints, {R} requêtes, {C} caches ({X}MB)")
 
-    # --- MODÉLISATION OPTIMISÉE ---
+  
     print("--- Construction du modèle ---")
     try:
         m = gp.Model("streaming_videos")
@@ -56,16 +56,14 @@ def solve_videos(input_path):
 
         requested_videos = set(r['v'] for r in requests)
         
-        # 1. Variables Y (Vidéo v dans Cache c)
-        # Optimisation : On ne crée la variable que si la vidéo PEUT tenir dans le cache
+        # 2. Variables
         y = {}
         for c in range(C):
             for v in requested_videos:
                 if video_sizes[v] <= X:
                     y[c, v] = m.addVar(vtype=GRB.BINARY, name=f"y[{c},{v}]")
 
-        # 2. Variables X (Requête r servie par Cache c) et Objectif
-        # Optimisation : On stocke les termes de l'objectif dans une liste pour utiliser quicksum
+
         x = {}
         obj_terms = []
         
@@ -76,35 +74,33 @@ def solve_videos(input_path):
             ld = endpoints[e_id]['ld']
             
             for c_id, lc in endpoints[e_id]['conns'].items():
-                # Filtre : Cache plus rapide que DC ET vidéo pas trop grosse
+                
                 if lc < ld and video_sizes[v_id] <= X:
                     saved = (ld - lc) * count
                     x[r['id'], c_id] = m.addVar(vtype=GRB.BINARY, name=f"x[{r['id']},{c_id}]")
                     obj_terms.append(saved * x[r['id'], c_id])
 
-        # Définir l'objectif en une seule fois (beaucoup plus rapide)
+        # Définir l'objectif 
         m.setObjective(gp.quicksum(obj_terms), GRB.MAXIMIZE)
 
         # 3. Contraintes
         
         # C1: Capacité des caches
         for c in range(C):
-            # On somme la taille des vidéos v présentes dans le cache c
-            # Utilisation de quicksum sur un générateur pour la vitesse
+         
             m.addConstr(
                 gp.quicksum(video_sizes[v] * y[c, v] for v in requested_videos if (c, v) in y) <= X,
                 name=f"Cap_C{c}"
             )
 
-        # C2: Cohérence (Si X alors Y)
-        # Si la requête r est servie par c, la vidéo doit être dans c
+        # C2: 
         for (r_id, c_id), x_var in x.items():
             v_id = requests[r_id]['v']
             m.addConstr(x_var <= y[c_id, v_id])
 
-        # C3: Unicité (Une requête servie au max par un seul cache)
+        # C3: 
         for r in requests:
-            # On récupère toutes les variables x associées à cette requête
+         
             vars_list = [x[r['id'], c] for c in endpoints[r['e']]['conns'] if (r['id'], c) in x]
             if vars_list:
                 m.addConstr(gp.quicksum(vars_list) <= 1)
@@ -137,7 +133,7 @@ def solve_videos(input_path):
         print(f"Erreur Gurobi : {e}")
 
 if __name__ == "__main__":
-    # --- VERSION FINALE POUR LE PROF ---
+ 
     if len(sys.argv) < 2:
         print("Usage: python videos.py [chemin_vers_dataset]")
         sys.exit(1)
